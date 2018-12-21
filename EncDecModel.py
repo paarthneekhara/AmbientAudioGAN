@@ -271,4 +271,7 @@ class WaveAE(Model):
     tf.summary.scalar('loss', recon_loss)
 
   def train_loop(self, sess):
-    sess.run(self.train_op)
+    num_disc_updates = self.wgangp_nupdates if self.gan_strategy == 'wgangp' else 1
+    for i in range(num_disc_updates):
+      sess.run(self.D_train_op)
+    sess.run(self.G_train_op)
