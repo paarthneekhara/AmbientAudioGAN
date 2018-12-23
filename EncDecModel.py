@@ -21,8 +21,8 @@ class WaveAE(Model):
   
   # measurement settings
   m_type = 'drop_patches'
-  m_patch_size = 256
-  m_prob = 0.4
+  m_patch_size = 512
+  m_prob = 0.5
 
   train_batch_size = 64
   alpha = 100.0
@@ -31,7 +31,7 @@ class WaveAE(Model):
   kernel_len = 25
   stride = 4
   use_skip = True
-  enc_length = 16
+  enc_length = 64
 
   def __init__(self, mode, *args, **kwargs):
     super().__init__(mode, *args, **kwargs)

@@ -102,8 +102,8 @@ if __name__ == '__main__':
       subseq_len = 16384,
       audio_fs = 16000,
       measurement = 'drop_patches',
-      m_patch_size = 256,
-      m_prob = 0.4
+      m_patch_size = 512,
+      m_prob = 0.5
       )
 
   args = parser.parse_args()
