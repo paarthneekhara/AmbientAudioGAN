@@ -66,7 +66,11 @@ class WaveEncoderFactor256(object):
     encoder_activations = [] # (4096, 1024,..,64)
     for ln in range(n_layers):
       with tf.variable_scope('downconv_{}'.format(ln)):
-        x = conv1d(x, self.dim * (2**ln))
+        if self.stride == 4:
+          x = conv1d(x, self.dim * (2**ln))
+        elif self.stride == 2:
+          lne = int((ln)/2)
+          x = conv1d(x, self.dim * (2**lne))
         encoder_activations.append(x)
       x = tf.nn.leaky_relu(x)
       x = batchnorm(x)
@@ -106,7 +110,7 @@ class WaveDecoderFactor256(object):
     self.use_skip = use_skip
     self.encoder_activations = encoder_activations
     self.enc_length = enc_length
-    
+
   def __call__(self, enc_x, training=False):
     conv1d_transpose = lambda x, n: conv1d_transpose_layer(x, n, self.kernel_len, self.stride)
     conv1x1d_transpose = lambda x, n: conv1d_transpose_layer(x, n, 1, 1)
@@ -122,7 +126,10 @@ class WaveDecoderFactor256(object):
     # Deaggregation layer
     # e.g. [64, 64] -> [64, 512]
     n_layers = int((math.log(16384./self.enc_length)/math.log(self.stride)))
-    channels_initial = int(self.dim * (2**(n_layers-1)))
+    if self.stride == 4:
+      channels_initial = int(self.dim * (2**(n_layers-1)))
+    elif self.stride == 2:
+      channels_initial = int(self.dim * (2**  int((n_layers-1)/2) ))
 
     encoder_activations = self.encoder_activations
 
@@ -144,7 +151,12 @@ class WaveDecoderFactor256(object):
 
     # channels = 
     for ln in range(n_layers - 1):
-      channels = int(channels/2.)
+      enc_ln = n_layers - 2 - ln
+      if self.stride == 2:
+        channels = int(self.dim * (2**  int((enc_ln)/2) ))
+      else:
+        channels = int(self.dim * (2**  enc_ln)) 
+      # channels = int(channels/2.)
       with tf.variable_scope('upconv_{}'.format(ln)):
         x = conv1d_transpose(x, channels)
         if self.use_skip:

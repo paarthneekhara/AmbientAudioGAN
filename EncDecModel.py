@@ -150,7 +150,11 @@ class WaveAE(Model):
     n_layers = int((math.log(16384./16.)/math.log(self.stride)))
     for ln in range(n_layers):
       with tf.variable_scope('downconv_{}'.format(ln)):
-        output = conv1d(output, self.dim * (2**ln))
+        if self.stride == 4:
+          output = conv1d(output, self.dim * (2**ln))
+        elif self.stride == 2:
+          lne = int((ln)/2)
+          output = conv1d(output, self.dim * (2**lne))
       
       output = lrelu(output)
       if ln < n_layers - 1:

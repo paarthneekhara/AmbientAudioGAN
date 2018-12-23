@@ -1,12 +1,16 @@
 import tensorflow as tf
-
+from AudioModel.util import override_model_attrs
 import EncDecModel
 from AudioModel.model import Model, Modes
 
 ckpt = 16384
 a = tf.placeholder('float32', (32, 16384, 1, 1))
+b = tf.placeholder('float32', (32, 16384, 1, 1))
 model = EncDecModel.WaveAE(mode = Modes.TRAIN)
-model(a)
+oberrides =  "objective=l1,batchnorm=False,train_batch_size=64,alpha=100.0,enc_length=16,stride=2,kernel_len=31"
+model, summary = override_model_attrs(model, oberrides)
+
+model(a, b)
 
 # with tf.variable_scope('AE'):
 #   with tf.variable_scope('E'):
