@@ -2,3 +2,4 @@
 test_loader.py
 Data/*
 .DS_Store
+prepare_data.sh

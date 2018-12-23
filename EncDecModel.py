@@ -21,8 +21,8 @@ class WaveAE(Model):
   
   # measurement settings
   m_type = 'drop_patches'
-  m_patch_size = 512
-  m_prob = 0.5
+  m_patch_size = 256
+  m_prob = 0.4
 
   train_batch_size = 64
   alpha = 100.0
