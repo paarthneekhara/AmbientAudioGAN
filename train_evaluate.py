@@ -43,12 +43,10 @@ def train(fps, args):
   # Train
   # model_dir_path = "/data2/paarth/TrainDir/WaveAE/WaveAEsc09_l1batchnormFalse/eval_sc09_valid"
   # ckpt = 253802
-  saver = tf.train.Saver(var_list=model.AE_vars)
   with tf.train.MonitoredTrainingSession(
       checkpoint_dir=args.train_dir,
       save_checkpoint_secs=args.train_ckpt_every_nsecs,
       save_summaries_secs=args.train_summary_every_nsecs) as sess:
-    saver.restore(sess, args.ae_ckpt_fp)
     while not sess.should_stop():
       model.train_loop(sess)
   

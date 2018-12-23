@@ -3,9 +3,10 @@ import os
 import numpy as np
 import tensorflow as tf
 
-from AudioModel.conv1d import WaveEncoderFactor256, WaveDecoderFactor256
+from AudioModel.conv1d import WaveEncoderFactor256, WaveDecoderFactor256, conv1d_layer
 from AudioModel.model import Model, Modes
 import measurement
+import math
 
 class WaveAE(Model):
   subseq_len = 16384
@@ -17,18 +18,45 @@ class WaveAE(Model):
   wgangp_lambda = 10
   wgangp_nupdates = 5
   gan_strategy = 'wgangp'
+  
+  # measurement settings
+  m_type = 'block_patch'
+  m_patch_size = 4000
+  m_prob = 0.5
+
   train_batch_size = 64
   alpha = 100.0
   eval_batch_size = 1
   dim = 64
-  kernel_len = 5
-  stride = 4
+  kernel_len = 25
+  stride = 2
+  use_skip = True
+  enc_length = 16
 
   def __init__(self, mode, *args, **kwargs):
     super().__init__(mode, *args, **kwargs)
     if self.mode == Modes.EVAL:
       self.best_l2 = None
 
+
+  # input shape: bs, len, 1, 1
+  def measure_signal(x):
+    signal = x[:,:,0,:]
+    if self.measurement == 'block_patch':
+      measured_audio, _ = measurement.block_patch(
+        signal, 
+        patch_size = self.m_patch_size)
+    elif self.measurement == 'drop_patches':
+      measured_audio, _ = measurement.drop_patches(
+        signal, 
+        patch_size = self.m_patch_size, 
+        drop_prob = self.m_prob)
+    else:
+      raise NotImplementedError() 
+
+
+    # measured_expanded = tf.expand_dims(tf.expand_dims(measured_audio, -1), -1)
+    measured_expanded = tf.expand_dims(measured_audio, -1)
 
   def build_generator(self, x):
     try:
@@ -40,13 +68,19 @@ class WaveAE(Model):
 
     # with tf.variable_scope('Gen'):
     with tf.variable_scope('E'):
-      enc = WaveEncoderFactor256(batchnorm=self.batchnorm)
+      enc = WaveEncoderFactor256(
+        dim = self.dim,
+        kernel_len = self.kernel_len,
+        stride = self.stride,
+        batchnorm=self.batchnorm,
+        enc_length = self.enc_length
+        )
       self.E_x = E_x = enc(x, training=training)
 
     z = tf.random_uniform([batch_size, self.zdim], -1, 1, dtype=tf.float32)
     with tf.variable_scope('z_project'):
-      z_proj = tf.layers.dense(z, 64 * 64)
-      z_proj = tf.reshape(z_proj, [batch_size, 64, 1, 64])
+      z_proj = tf.layers.dense(z, self.enc_length * 64)
+      z_proj = tf.reshape(z_proj, [batch_size, self.enc_length, 1, 64])
       z_proj = tf.nn.tanh(z_proj)
     E_x_concat = tf.concat([E_x, z_proj], axis = -1)
     print("E_x concat", E_x_concat)
@@ -54,8 +88,17 @@ class WaveAE(Model):
 
 
     with tf.variable_scope('D'):
-      dec = WaveDecoderFactor256(batchnorm=self.batchnorm)
+      dec = WaveDecoderFactor256(
+        dim = self.dim,
+        kernel_len = self.kernel_len,
+        stride = self.stride,
+        batchnorm=self.batchnorm,
+        use_skip = self.use_skip,
+        encoder_activations = enc.encoder_activations,
+        enc_length = self.enc_length
+        )
       self.D_E_x = D_E_x = dec(E_x_concat, training=training)
+
     print("Decoded")
     print(self.D_E_x)
 
@@ -68,6 +111,8 @@ class WaveAE(Model):
         (self.kernel_len, 1),
         strides=(self.stride, 1),
         padding='same')
+    
+    conv1x1d = lambda x, n: conv1d_layer(x, n, 1, 1)
 
     def lrelu(inputs, alpha=0.2):
       return tf.maximum(alpha * inputs, inputs)
@@ -95,46 +140,30 @@ class WaveAE(Model):
 
     # Layer 0
     # [16384, 1] -> [4096, 64]
+    print("Discriminator")
     output = x
-    with tf.variable_scope('downconv_0'):
-      output = conv1d(output, self.dim)
+    print (output)
+    n_layers = int((math.log(16384./16.)/math.log(self.stride)))
+    for ln in range(n_layers):
+      with tf.variable_scope('downconv_{}'.format(ln)):
+        output = conv1d(output, self.dim * (2**ln))
+      
+      output = lrelu(output)
+      if ln < n_layers - 1:
+        output = phaseshuffle(output)
+      print (output)
+    # Aggregate
+    with tf.variable_scope('downconv_1x1'):
+      output = conv1x1d(output, self.dim * 1)
     output = lrelu(output)
-    output = phaseshuffle(output)
-
-    # Layer 1
-    # [4096, 64] -> [1024, 128]
-    with tf.variable_scope('downconv_1'):
-      output = conv1d(output, self.dim * 2)
-    output = lrelu(output)
-    output = phaseshuffle(output)
-
-    # Layer 2
-    # [1024, 128] -> [256, 256]
-    with tf.variable_scope('downconv_2'):
-      output = conv1d(output, self.dim * 4)
-    output = lrelu(output)
-    output = phaseshuffle(output)
-
-    # Layer 3
-    # [256, 256] -> [64, 512]
-    with tf.variable_scope('downconv_3'):
-      output = conv1d(output, self.dim * 8)
-    output = lrelu(output)
-    output = phaseshuffle(output)
-
-    # Layer 4
-    # [64, 512] -> [16, 1024]
-    with tf.variable_scope('downconv_4'):
-      output = conv1d(output, self.dim * 16)
-    output = lrelu(output)
-
-    # Flatten
-    output = tf.reshape(output, [batch_size, 4 * 4 * self.dim * 16])
-
+    
+    print (output)
+    output = tf.reshape(output, [batch_size, 16 * self.dim])
+    print (output)
     # Connect to single logit
     with tf.variable_scope('output'):
       output = tf.layers.dense(output, 1)[:, 0]
-
+    print (output)
     return output
 
   def __call__(self, x):
@@ -146,28 +175,28 @@ class WaveAE(Model):
     training = self.mode == Modes.TRAIN
 
     # making noisy signal
+    self.x = x
     clean_audio = x
-    _, x = measurement.block_patch(x[:,:,0,0], patch_size = 4000)
-    x = tf.expand_dims(tf.expand_dims(x, -1), -1)
+    x, _ = measurement.block_patch(x[:,:,0,:], patch_size = 4000)
+    x = tf.expand_dims(x, -1)
     
 
     with tf.variable_scope('Gen'):
       E_x, D_E_x = self.build_generator(x)
 
-    # zeros where input is 0, one else where
+    # zeros where input is 0, one else where  
     input_mask = tf.cast( tf.greater(tf.abs(x), tf.zeros_like(x)), dtype = tf.float32 )
-    pads, measured_audio = measurement.block_patch(D_E_x[:,:,0,0], patch_size = 4000)
+    measured_audio, _ = measurement.block_patch(D_E_x[:,:,0,:], patch_size = 4000)
     print (measured_audio)
-    measured_expanded = tf.expand_dims(tf.expand_dims(measured_audio, -1), -1)
+    # measured_expanded = tf.expand_dims(tf.expand_dims(measured_audio, -1), -1)
+    measured_expanded = tf.expand_dims(measured_audio, -1)
     print(measured_expanded)
+    # measured_expanded = D_E_x
 
     with tf.name_scope('D_x'), tf.variable_scope('Disc'):
       D_x = self.build_discriminator(x)
     with tf.name_scope('D_g'), tf.variable_scope('Disc', reuse=True):
       D_g = self.build_discriminator(measured_expanded)
-    D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='D')
-
-    
 
     if self.gan_strategy == 'dcgan':
       D_G_z = D_g
@@ -248,10 +277,11 @@ class WaveAE(Model):
     elif self.objective == 'l2':
       recon_loss = l2
 
-    self.step = step = tf.train.get_or_create_global_step()
+    
     self.G_vars = G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Gen')
     self.D_vars = D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Disc')
-
+    for var in self.D_vars:
+      print ("Disc", var)
     G_loss_combined = G_loss + self.alpha * recon_loss
     self.G_train_op = G_opt.minimize(G_loss_combined, var_list=G_vars,
         global_step=tf.train.get_or_create_global_step())
@@ -265,12 +295,14 @@ class WaveAE(Model):
     tf.summary.audio('D_E_x', D_E_x[:, :, 0, :], self.audio_fs)
     tf.summary.image('E_x', embedding_image)
     tf.summary.scalar('G_loss', G_loss)
+    tf.summary.scalar('G_loss_combined', G_loss_combined)
     tf.summary.scalar('D_loss', D_loss)
     tf.summary.scalar('l1', l1)
     tf.summary.scalar('l2', l2)
     tf.summary.scalar('loss', recon_loss)
 
   def train_loop(self, sess):
+    
     num_disc_updates = self.wgangp_nupdates if self.gan_strategy == 'wgangp' else 1
     for i in range(num_disc_updates):
       sess.run(self.D_train_op)

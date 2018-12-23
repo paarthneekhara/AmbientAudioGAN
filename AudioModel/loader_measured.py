@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 
 
-def decode_audio(fp, fs=None, mono=False, normalize=False, fastwav=False):
+def decode_audio(fp, fs=None, mono=False, normalize=False, fastwav=False, measured = False):
   """Decodes audio file paths into 32-bit floating point vectors.
 
   Args:
@@ -16,6 +16,9 @@ def decode_audio(fp, fs=None, mono=False, normalize=False, fastwav=False):
   Returns:
     A np.float32 array containing the audio samples at specified sample rate.
   """
+  if measured:
+    fp = fp.decode('latin').replace("clean", "measured")
+
   if fastwav:
     # Read with scipy wavread (fast).
     _fs, _wav = wavread(fp)
@@ -106,21 +109,39 @@ def decode_extract_and_batch(
     dataset = dataset.repeat()
 
   def _decode_audio_shaped(fp):
-    _decode_audio_closure = lambda _fp: decode_audio(
+    _decode_audio_clean = lambda _fp: decode_audio(
       _fp,
       fs=audio_fs,
       mono=audio_mono,
       normalize=audio_normalize,
       fastwav=decode_fastwav)
 
-    audio = tf.py_func(
-        _decode_audio_closure,
+    _decode_audio_measured = lambda _fp: decode_audio(
+      _fp,
+      fs=audio_fs,
+      mono=audio_mono,
+      normalize=audio_normalize,
+      fastwav=decode_fastwav,
+      measured = True
+      )
+
+    clean_audio = tf.py_func(
+        _decode_audio_clean,
         [fp],
         tf.float32,
         stateful=False)
-    audio.set_shape([None, 1, 1 if audio_mono else None])
 
-    return audio
+    # m_fp = fp.replace("clean", "measured")
+    measured_audio = tf.py_func(
+        _decode_audio_measured,
+        [fp],
+        tf.float32,
+        stateful=False)
+
+    clean_audio.set_shape([None, 1, 1 if audio_mono else None])
+    measured_audio.set_shape([None, 1, 1 if audio_mono else None])
+
+    return clean_audio, measured_audio
 
   # Decode audio
   dataset = dataset.map(
@@ -128,7 +149,7 @@ def decode_extract_and_batch(
       num_parallel_calls=decode_parallel_calls)
 
   # Parallel
-  def _subseq(audio):
+  def _subseq(clean_audio, measured_audio):
     # Calculate hop size
     assert subseq_overlap_ratio >= 0
     subseq_hop = int(round(subseq_len * (1. - subseq_overlap_ratio)))
@@ -138,22 +159,34 @@ def decode_extract_and_batch(
     # Randomize starting phase:
     if subseq_randomize_offset:
       start = tf.random_uniform([], maxval=subseq_len, dtype=tf.int32)
-      audio = audio[start:]
+      clean_audio = clean_audio[start:]
+      measured_audio = measured_audio[start:]
 
     # Extract subsequences
-    audio_subseqs = tf.contrib.signal.frame(
-        audio,
+    clean_audio_subseqs = tf.contrib.signal.frame(
+        clean_audio,
         subseq_len,
         subseq_hop,
         pad_end=subseq_pad_end,
         pad_value=0,
         axis=0)
-    print ("Audio Subseq", audio_subseqs)
-    return audio_subseqs
+    measured_audio_subseqs = tf.contrib.signal.frame(
+        measured_audio,
+        subseq_len,
+        subseq_hop,
+        pad_end=subseq_pad_end,
+        pad_value=0,
+        axis=0)
 
-  def _subseq_dataset_wrapper(audio):
-    audio_subseqs = _subseq(audio)
-    return tf.data.Dataset.from_tensor_slices(audio_subseqs)
+    return clean_audio_subseqs, measured_audio_subseqs
+
+  def _subseq_dataset_wrapper(clean_audio, measured_audio):
+    clean_audio_subseqs, measured_audio_subseqs = _subseq(clean_audio, measured_audio)
+    return tf.data.Dataset.zip((
+      tf.data.Dataset.from_tensor_slices(clean_audio_subseqs),
+      tf.data.Dataset.from_tensor_slices(measured_audio_subseqs),
+    ))
+    
 
   # Extract parallel subsequences from both audio and features
   dataset = dataset.flat_map(_subseq_dataset_wrapper)
