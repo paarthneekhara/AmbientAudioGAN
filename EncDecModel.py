@@ -20,8 +20,8 @@ class WaveAE(Model):
   gan_strategy = 'wgangp'
   
   # measurement settings
-  m_type = 'block_patch'
-  m_patch_size = 4000
+  m_type = 'drop_patches'
+  m_patch_size = 512
   m_prob = 0.5
 
   train_batch_size = 64
@@ -29,7 +29,7 @@ class WaveAE(Model):
   eval_batch_size = 1
   dim = 64
   kernel_len = 25
-  stride = 2
+  stride = 4
   use_skip = True
   enc_length = 16
 
@@ -40,13 +40,13 @@ class WaveAE(Model):
 
 
   # input shape: bs, len, 1, 1
-  def measure_signal(x):
+  def measure_signal(self, x):
     signal = x[:,:,0,:]
-    if self.measurement == 'block_patch':
+    if self.m_type == 'block_patch':
       measured_audio, _ = measurement.block_patch(
         signal, 
         patch_size = self.m_patch_size)
-    elif self.measurement == 'drop_patches':
+    elif self.m_type == 'drop_patches':
       measured_audio, _ = measurement.drop_patches(
         signal, 
         patch_size = self.m_patch_size, 
@@ -57,6 +57,8 @@ class WaveAE(Model):
 
     # measured_expanded = tf.expand_dims(tf.expand_dims(measured_audio, -1), -1)
     measured_expanded = tf.expand_dims(measured_audio, -1)
+
+    return measured_expanded
 
   def build_generator(self, x):
     try:
@@ -134,13 +136,15 @@ class WaveAE(Model):
 
       return x
 
+    print("Discriminator")
+    
     batch_size = tf.shape(x)[0]
 
     phaseshuffle = lambda x: apply_phaseshuffle(x, self.phaseshuffle_rad)
 
     # Layer 0
     # [16384, 1] -> [4096, 64]
-    print("Discriminator")
+    
     output = x
     print (output)
     n_layers = int((math.log(16384./16.)/math.log(self.stride)))
@@ -166,7 +170,7 @@ class WaveAE(Model):
     print (output)
     return output
 
-  def __call__(self, x):
+  def __call__(self, clean_audio, x):
     try:
       batch_size = int(x.get_shape()[0])
     except:
@@ -176,27 +180,20 @@ class WaveAE(Model):
 
     # making noisy signal
     self.x = x
-    clean_audio = x
-    x, _ = measurement.block_patch(x[:,:,0,:], patch_size = 4000)
-    x = tf.expand_dims(x, -1)
     
-
     with tf.variable_scope('Gen'):
       E_x, D_E_x = self.build_generator(x)
 
     # zeros where input is 0, one else where  
     input_mask = tf.cast( tf.greater(tf.abs(x), tf.zeros_like(x)), dtype = tf.float32 )
-    measured_audio, _ = measurement.block_patch(D_E_x[:,:,0,:], patch_size = 4000)
-    print (measured_audio)
-    # measured_expanded = tf.expand_dims(tf.expand_dims(measured_audio, -1), -1)
-    measured_expanded = tf.expand_dims(measured_audio, -1)
-    print(measured_expanded)
+    measured = self.measure_signal(D_E_x)
+    print(measured)
     # measured_expanded = D_E_x
 
     with tf.name_scope('D_x'), tf.variable_scope('Disc'):
       D_x = self.build_discriminator(x)
     with tf.name_scope('D_g'), tf.variable_scope('Disc', reuse=True):
-      D_g = self.build_discriminator(measured_expanded)
+      D_g = self.build_discriminator(measured)
 
     if self.gan_strategy == 'dcgan':
       D_G_z = D_g
@@ -304,6 +301,8 @@ class WaveAE(Model):
   def train_loop(self, sess):
     
     num_disc_updates = self.wgangp_nupdates if self.gan_strategy == 'wgangp' else 1
+    print("Training")
     for i in range(num_disc_updates):
+      print(i)
       sess.run(self.D_train_op)
     sess.run(self.G_train_op)

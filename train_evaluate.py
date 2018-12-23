@@ -4,7 +4,7 @@ import pickle
 import numpy as np
 import tensorflow as tf
 
-from AudioModel.loader import waveform_decoder
+from AudioModel.loader_measured import waveform_decoder
 from AudioModel.model import Modes
 from AudioModel.util import override_model_attrs
 from EncDecModel import WaveAE
@@ -19,7 +19,7 @@ def train(fps, args):
 
   # Load data
   with tf.name_scope('loader'):
-    x = waveform_decoder(
+    clean, x = waveform_decoder(
         fps=fps,
         batch_size=model.train_batch_size,
         subseq_len=model.subseq_len,
@@ -38,7 +38,7 @@ def train(fps, args):
         gpu_num=0)
 
   # Create model
-  model(x)
+  model(clean, x)
 
   # Train
   # model_dir_path = "/data2/paarth/TrainDir/WaveAE/WaveAEsc09_l1batchnormFalse/eval_sc09_valid"
