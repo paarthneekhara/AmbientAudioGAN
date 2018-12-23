@@ -15,7 +15,14 @@ def block_patch(batch, patch_size = 0):
         padded = tf.pad(patch, padding, "CONSTANT", constant_values=1)
         
         paddings.append(padded)
-        res.append(tf.multiply(batch[idx], padded))
+
+        mask_clipping = (1 - padded) * 100.
+        # 100 where we want to clip audio and 0 everywhere else
+        clipped_audio = tf.clip_by_value(batch[idx] + mask_clipping, 
+            clip_value_min = -1, 
+            clip_value_max = 1)
+        
+        res.append(clipped_audio)
         
 
     paddings = tf.stack(paddings)
@@ -51,7 +58,14 @@ def drop_patches(batch, patch_size = 1000, drop_prob = 0.5):
         mask_tensor = tf.pad(mask_tensor, pad_size, "CONSTANT", constant_values=1)
         # print "mask tensor final", mask_tensor
         paddings.append(mask_tensor)
-        res.append(tf.multiply(batch[idx], mask_tensor))
+
+        mask_clipping = (1 - mask_tensor) * 100.
+        # 100 where we want to clip audio and 0 everywhere else
+        clipped_audio = tf.clip_by_value(batch[idx] + mask_clipping, 
+            clip_value_min = -1, 
+            clip_value_max = 1)
+
+        res.append(clipped_audio)
         
 
     paddings = tf.stack(paddings)

@@ -36,7 +36,7 @@ class WaveAE(Model):
   def __init__(self, mode, *args, **kwargs):
     super().__init__(mode, *args, **kwargs)
     if self.mode == Modes.EVAL:
-      self.best_l2 = None
+      self.best_clipped_l1 = None
 
 
   # input shape: bs, len, 1, 1
@@ -184,8 +184,8 @@ class WaveAE(Model):
     with tf.variable_scope('Gen'):
       E_x, D_E_x = self.build_generator(x)
 
-    # zeros where input is 0, one else where  
-    input_mask = tf.cast( tf.greater(tf.abs(x), tf.zeros_like(x)), dtype = tf.float32 )
+    # zeros where input is clipped, one else where  
+    input_mask = tf.cast( tf.less(tf.abs(x), tf.ones_like(x)*0.99), dtype = tf.float32 )
     measured = self.measure_signal(D_E_x)
     print(measured)
     # measured_expanded = D_E_x
@@ -277,11 +277,12 @@ class WaveAE(Model):
     
     self.G_vars = G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Gen')
     self.D_vars = D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Disc')
-    for var in self.D_vars:
-      print ("Disc", var)
+    self.step = step = tf.train.get_or_create_global_step()
+    
+
     G_loss_combined = G_loss + self.alpha * recon_loss
     self.G_train_op = G_opt.minimize(G_loss_combined, var_list=G_vars,
-        global_step=tf.train.get_or_create_global_step())
+        global_step=step)
     self.D_train_op = D_opt.minimize(D_loss, var_list=D_vars)
 
     # self.all_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='AE') + [step]
@@ -298,11 +299,65 @@ class WaveAE(Model):
     tf.summary.scalar('l2', l2)
     tf.summary.scalar('loss', recon_loss)
 
+  def build_denoiser(self, clean_audio, x):
+    with tf.variable_scope('Gen'):
+      E_x, D_E_x = self.build_generator(x)
+    self.G_vars = G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Gen')
+    self.step = step = tf.train.get_or_create_global_step()
+    self.restore_vars = G_vars + [step]
+
+    self.l1 = l1 = tf.reduce_mean(tf.abs(clean_audio - D_E_x))
+
+    mask = tf.cast( tf.greater(tf.abs(x), tf.ones_like(x)*0.99), dtype = tf.float32 )
+    #mask: ones where audio is clipped, zero elsewhere
+    self.clipped_l1 = all_l1 = tf.reduce_mean(tf.abs(mask*clean_audio - mask*D_E_x))
+    
+    self.all_l1 = tf.placeholder(tf.float32, [None])
+    self.all_clipped_l1 = tf.placeholder(tf.float32, [None])
+
+    summaries = [
+        tf.summary.scalar('l1', tf.reduce_mean(self.all_l1)),
+        tf.summary.scalar('clipped_l1', tf.reduce_mean(self.all_clipped_l1))
+    ]
+    self.summaries = tf.summary.merge(summaries)
+
+
   def train_loop(self, sess):
     
     num_disc_updates = self.wgangp_nupdates if self.gan_strategy == 'wgangp' else 1
-    print("Training")
     for i in range(num_disc_updates):
-      print(i)
       sess.run(self.D_train_op)
     sess.run(self.G_train_op)
+
+
+  def eval_ckpt(self, ckpt_fp, sess, summary_writer=None, saver=None, eval_dir=None):
+    saver.restore(sess, ckpt_fp)
+
+    _step = sess.run(self.step)
+
+    _all_l1 = []
+    _all_clipped_l1 = []
+    while True:
+      try:
+        _l1, _clipped_l1 = sess.run([self.l1, self.clipped_l1])
+      except tf.errors.OutOfRangeError:
+        break
+      _all_l1.append(_l1)
+      _all_clipped_l1.append(_clipped_l1)
+    _all_l1 = np.array(_all_l1)
+    _all_clipped_l1 = np.array(_all_clipped_l1)
+
+    if summary_writer is not None:
+      _summaries = sess.run(self.summaries, {self.all_l1: _all_l1, self.all_clipped_l1: _all_clipped_l1})
+      summary_writer.add_summary(_summaries, _step)
+
+    if saver is not None and eval_dir is not None:
+      _clipped_l1 = np.mean(_all_clipped_l1)
+      if self.best_clipped_l1 is None or _clipped_l1 < self.best_clipped_l1:
+        saver.save(sess, os.path.join(eval_dir, 'best_clipped_l1'), _step)
+        self.best_clipped_l1 = _clipped_l1
+
+    return {
+        'l1': _all_l1,
+        'l2': _all_clipped_l1
+    }

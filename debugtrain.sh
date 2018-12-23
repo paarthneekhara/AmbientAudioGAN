@@ -42,7 +42,18 @@ python3 train_evaluate.py train \
 	${TRAIN_DIR} \
 	--data_dir Data/debug \
 	--data_fastwav \
-	--model_overrides "objective=l1,batchnorm=False,train_batch_size=64,alpha=100.0" \
+	--model_overrides "objective=l1,batchnorm=False,train_batch_size=2,alpha=100.0" \
+	--train_summary_every_nsecs 30 \
+	--data_overlap_ratio 0.5 \
+	--train_ckpt_every_nsecs 60 \
+	--data_randomize_offset
+
+TRAIN_DIR=Data/train/debug
+python3 train_evaluate.py eval \
+	${TRAIN_DIR} \
+	--data_dir Data/val \
+	--data_fastwav \
+	--model_overrides "objective=l1,batchnorm=False,train_batch_size=2,alpha=100.0" \
 	--train_summary_every_nsecs 30 \
 	--data_overlap_ratio 0.5 \
 	--data_randomize_offset

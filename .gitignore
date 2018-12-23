@@ -1,3 +1,4 @@
 *.pyc
 test_loader.py
 Data/*
+.DS_Store

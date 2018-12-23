@@ -50,6 +50,52 @@ def train(fps, args):
     while not sess.should_stop():
       model.train_loop(sess)
   
+def eval(fps, args):
+  eval_dir = os.path.join(args.train_dir, 'eval_valid')
+  if not os.path.isdir(eval_dir):
+    os.makedirs(eval_dir)
+
+  model = WaveAE(Modes.EVAL)
+  model, summary = override_model_attrs(model, args.model_overrides)
+  print('-' * 80)
+  print(summary)
+  print('-' * 80)
+
+  # Load data
+  with tf.name_scope('loader'):
+    clean, x = waveform_decoder(
+        fps=fps,
+        batch_size=model.eval_batch_size,
+        subseq_len=model.subseq_len,
+        audio_fs=model.audio_fs,
+        audio_mono=True,
+        audio_normalize=True,
+        decode_fastwav=args.data_fastwav,
+        decode_parallel_calls=1,
+        repeat=False,
+        shuffle=False,
+        shuffle_buffer_size=None,
+        subseq_randomize_offset=False,
+        subseq_overlap_ratio=0.,
+        subseq_pad_end=True,
+        prefetch_size=None,
+        gpu_num=None)
+
+  model.build_denoiser(clean, x)
+
+  saver = tf.train.Saver(var_list=model.restore_vars, max_to_keep=1)
+  summary_writer = tf.summary.FileWriter(eval_dir)
+
+  ckpt_fp = None
+  while True:
+    latest_ckpt_fp = tf.train.latest_checkpoint(args.train_dir)
+    if latest_ckpt_fp != ckpt_fp:
+      ckpt_fp = latest_ckpt_fp
+      print('Evaluating {}'.format(ckpt_fp))
+      with tf.Session() as sess:
+        model.eval_ckpt(ckpt_fp, sess, summary_writer, saver, eval_dir)
+      print('Done!')
+    time.sleep(1)
 
 if __name__ == '__main__':
   from argparse import ArgumentParser
@@ -58,7 +104,7 @@ if __name__ == '__main__':
 
   parser = ArgumentParser()
 
-  parser.add_argument('mode', type=str, choices=['train', 'incept', 'infer'])
+  parser.add_argument('mode', type=str, choices=['train', 'eval'])
   parser.add_argument('train_dir', type=str)
 
   parser.add_argument('--data_dir', type=str, required=True)
@@ -94,5 +140,7 @@ if __name__ == '__main__':
 
   if args.mode == 'train':
     train(fps, args)
+  elif args.mode == 'eval':
+    eval(fps, args)
   else:
     raise NotImplementedError()
