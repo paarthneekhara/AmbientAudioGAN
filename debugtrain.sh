@@ -30,7 +30,6 @@ python3 train_evaluate.py train \
 	--data_fastwav \
 	--model_overrides "objective=l1,batchnorm=False,train_batch_size=64,alpha=100.0" \
 	--train_summary_every_nsecs 30 \
-	--data_overlap_ratio 0.5 \
 	--data_randomize_offset
 
 

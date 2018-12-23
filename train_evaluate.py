@@ -135,7 +135,7 @@ if __name__ == '__main__':
   if not os.path.isdir(args.train_dir):
     os.makedirs(args.train_dir)
 
-  fps = glob.glob(os.path.join(args.data_dir, '*.wav'))
+  fps = glob.glob(os.path.join(args.data_dir, '*_clean.wav'))
   print('Found {} audio files'.format(len(fps)))
 
   if args.mode == 'train':
