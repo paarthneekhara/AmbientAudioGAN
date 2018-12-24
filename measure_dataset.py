@@ -103,7 +103,7 @@ if __name__ == '__main__':
       audio_fs = 16000,
       measurement = 'drop_patches',
       m_patch_size = 512,
-      m_prob = 0.5
+      m_prob = 0.4
       )
 
   args = parser.parse_args()
