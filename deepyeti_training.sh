@@ -25,7 +25,7 @@ python3 train_evaluate.py train \
 	${TRAIN_DIR} \
 	--data_dir /data2/paarth/ambient/clipped_dp_512_04/tatum/train \
 	--data_fastwav \
-	--model_overrides "objective=l1,batchnorm=False,train_batch_size=64,alpha=100.0,enc_length=16,use_skip=False,stride=2,skip_limit=3" \
+	--model_overrides "objective=l1,batchnorm=False,train_batch_size=64,alpha=100.0,enc_length=16,use_skip=True,stride=2,skip_limit=3" \
 	--train_summary_every_nsecs 60 
 
 export CUDA_VISIBLE_DEVICES="-1"
@@ -34,7 +34,7 @@ python3 train_evaluate.py eval \
 	${TRAIN_DIR} \
 	--data_dir /data2/paarth/ambient/clipped_dp_512_04/tatum/valid \
 	--data_fastwav \
-	--model_overrides "objective=l1,batchnorm=False,train_batch_size=2,alpha=100.0,enc_length=16,use_skip=False,stride=4,skip_limit=3"
+	--model_overrides "objective=l1,batchnorm=False,train_batch_size=2,alpha=100.0,enc_length=16,use_skip=True,stride=4,skip_limit=3"
 
 
 export CUDA_VISIBLE_DEVICES="1"
