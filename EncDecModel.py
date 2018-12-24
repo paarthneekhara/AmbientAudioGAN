@@ -3,7 +3,8 @@ import os
 import numpy as np
 import tensorflow as tf
 
-from AudioModel.conv1d import WaveEncoderFactor256, WaveDecoderFactor256, conv1d_layer
+from AudioModel.EncoderDecoder import WaveEncoder, WaveDecoder, conv1d_layer
+# from AudioModel.conv1d import WaveEncoderFactor256, WaveDecoderFactor256, conv1d_layer
 from AudioModel.model import Model, Modes
 import measurement
 import math
@@ -32,6 +33,7 @@ class WaveAE(Model):
   stride = 4
   use_skip = True
   enc_length = 64
+  skip_limit = 3
 
   def __init__(self, mode, *args, **kwargs):
     super().__init__(mode, *args, **kwargs)
@@ -70,19 +72,19 @@ class WaveAE(Model):
 
     # with tf.variable_scope('Gen'):
     with tf.variable_scope('E'):
-      enc = WaveEncoderFactor256(
+      enc = WaveEncoder(
         dim = self.dim,
         kernel_len = self.kernel_len,
         stride = self.stride,
         batchnorm=self.batchnorm,
-        enc_length = self.enc_length
+        enc_length = self.enc_length,
         )
       self.E_x = E_x = enc(x, training=training)
 
     z = tf.random_uniform([batch_size, self.zdim], -1, 1, dtype=tf.float32)
     with tf.variable_scope('z_project'):
-      z_proj = tf.layers.dense(z, self.enc_length * 64)
-      z_proj = tf.reshape(z_proj, [batch_size, self.enc_length, 1, 64])
+      z_proj = tf.layers.dense(z, self.enc_length * 512)
+      z_proj = tf.reshape(z_proj, [batch_size, self.enc_length, 1, 512])
       z_proj = tf.nn.tanh(z_proj)
     E_x_concat = tf.concat([E_x, z_proj], axis = -1)
     print("E_x concat", E_x_concat)
@@ -90,14 +92,15 @@ class WaveAE(Model):
 
 
     with tf.variable_scope('D'):
-      dec = WaveDecoderFactor256(
+      dec = WaveDecoder(
         dim = self.dim,
         kernel_len = self.kernel_len,
         stride = self.stride,
         batchnorm=self.batchnorm,
         use_skip = self.use_skip,
         encoder_activations = enc.encoder_activations,
-        enc_length = self.enc_length
+        enc_length = self.enc_length,
+        skip_limit = self.skip_limit
         )
       self.D_E_x = D_E_x = dec(E_x_concat, training=training)
 
@@ -163,8 +166,7 @@ class WaveAE(Model):
     # Aggregate
     with tf.variable_scope('downconv_1x1'):
       output = conv1x1d(output, self.dim * 1)
-    output = lrelu(output)
-    
+    output = lrelu(output)    
     print (output)
     output = tf.reshape(output, [batch_size, 16 * self.dim])
     print (output)
