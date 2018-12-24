@@ -270,8 +270,8 @@ class WaveAE(Model):
     else:
       raise NotImplementedError()
 
-    self.l1 = l1 = tf.reduce_mean(tf.abs(x - input_mask * D_E_x))
-    self.l2 = l2 = tf.reduce_mean(tf.square(x - input_mask * D_E_x))
+    self.l1 = l1 = tf.reduce_mean(tf.abs(input_mask * x - input_mask * D_E_x))
+    self.l2 = l2 = tf.reduce_mean(tf.square(input_mask * x - input_mask * D_E_x))
     
     if self.objective == 'l1':
       recon_loss = l1
@@ -320,7 +320,7 @@ class WaveAE(Model):
     self.all_clipped_l1 = tf.placeholder(tf.float32, [None])
 
     summaries = [
-        tf.summary.scalar('l1', tf.reduce_mean(self.all_l1)),
+        tf.summary.scalar('whole_l1', tf.reduce_mean(self.all_l1)),
         tf.summary.scalar('clipped_l1', tf.reduce_mean(self.all_clipped_l1))
     ]
     self.summaries = tf.summary.merge(summaries)
@@ -363,5 +363,5 @@ class WaveAE(Model):
 
     return {
         'l1': _all_l1,
-        'l2': _all_clipped_l1
+        'clipped_l1': _all_clipped_l1
     }
