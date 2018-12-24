@@ -34,6 +34,7 @@ class WaveAE(Model):
   use_skip = True
   enc_length = 64
   skip_limit = 3
+  emb_channels = 128
 
   def __init__(self, mode, *args, **kwargs):
     super().__init__(mode, *args, **kwargs)
@@ -78,13 +79,14 @@ class WaveAE(Model):
         stride = self.stride,
         batchnorm=self.batchnorm,
         enc_length = self.enc_length,
+        emb_channels = self.emb_channels
         )
       self.E_x = E_x = enc(x, training=training)
 
     z = tf.random_uniform([batch_size, self.zdim], -1, 1, dtype=tf.float32)
     with tf.variable_scope('z_project'):
-      z_proj = tf.layers.dense(z, self.enc_length * 512)
-      z_proj = tf.reshape(z_proj, [batch_size, self.enc_length, 1, 512])
+      z_proj = tf.layers.dense(z, self.enc_length * self.emb_channels)
+      z_proj = tf.reshape(z_proj, [batch_size, self.enc_length, 1, self.emb_channels])
       z_proj = tf.nn.tanh(z_proj)
     E_x_concat = tf.concat([E_x, z_proj], axis = -1)
     print("E_x concat", E_x_concat)
@@ -192,6 +194,7 @@ class WaveAE(Model):
 
     # zeros where input is clipped, one else where  
     input_mask = tf.cast( tf.less(tf.abs(x), tf.ones_like(x)*0.99), dtype = tf.float32 )
+    signal_filled = input_mask * x + (1 - input_mask) * D_E_x
     measured = self.measure_signal(D_E_x)
     print(measured)
     # measured_expanded = D_E_x
@@ -297,6 +300,7 @@ class WaveAE(Model):
     tf.summary.audio('clean', clean_audio[:, :, 0, :], self.audio_fs)
     tf.summary.audio('x', x[:, :, 0, :], self.audio_fs)
     tf.summary.audio('D_E_x', D_E_x[:, :, 0, :], self.audio_fs)
+    tf.summary.audio('filled', signal_filled[:, :, 0, :], self.audio_fs)
     tf.summary.image('E_x', embedding_image)
     tf.summary.scalar('G_loss', G_loss)
     tf.summary.scalar('G_loss_combined', G_loss_combined)

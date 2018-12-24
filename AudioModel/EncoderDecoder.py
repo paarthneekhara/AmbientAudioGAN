@@ -41,6 +41,7 @@ class WaveEncoder(object):
       stride=4,
       batchnorm=False,
       enc_length = 64,
+      emb_channels = 128,
       nonlin=tf.nn.tanh):
     self.dim = dim
     self.kernel_len = kernel_len
@@ -48,10 +49,12 @@ class WaveEncoder(object):
     self.batchnorm = batchnorm
     self.nonlin = nonlin
     self.enc_length = enc_length
+    self.emb_channels = emb_channels
 
   def __call__(self, x, training=False):
     conv1d = lambda x, n: conv1d_layer(x, n, self.kernel_len, self.stride)
     conv1x1d = lambda x, n: conv1d_layer(x, n, 1, 1)
+    conv1ds1 = lambda x, n, k: conv1d_layer(x, n, k, 1)
 
     if self.batchnorm:
       batchnorm = lambda x: tf.layers.batch_normalization(x, training=training)
@@ -72,11 +75,12 @@ class WaveEncoder(object):
           lne = int((ln)/2)
           x = conv1d(x, self.dim * (2**lne))
         encoder_activations.append(x)
-      
-      if ln != n_layers - 1:
-        x = tf.nn.leaky_relu(x)
-        x = batchnorm(x)
+      x = tf.nn.leaky_relu(x)
+      x = batchnorm(x)
       print(x)
+
+    with tf.variable_scope('downconv_last'):
+      x = conv1ds1(x, self.emb_channels, self.kernel_len)
 
     self.encoder_activations = encoder_activations
     if self.nonlin is not None:
@@ -110,6 +114,7 @@ class WaveDecoder(object):
   def __call__(self, enc_x, training=False):
     conv1d_transpose = lambda x, n: conv1d_transpose_layer(x, n, self.kernel_len, self.stride)
     conv1x1d_transpose = lambda x, n: conv1d_transpose_layer(x, n, 1, 1)
+    conv1ds1_transpose = lambda x, n, k: conv1d_transpose_layer(x, n, k, 1)
 
     if self.batchnorm:
       batchnorm = lambda x: tf.layers.batch_normalization(x, training=training)
@@ -129,9 +134,18 @@ class WaveDecoder(object):
 
     encoder_activations = self.encoder_activations
 
+    n_skips = 0
+    with tf.variable_scope('upconv_first'):
+      x = conv1ds1_transpose(x, channels_initial, self.kernel_len)
+      if self.use_skip:
+        print("Adding Skip Connection {}".format(0))
+        print("Encoder Act", encoder_activations[-1])
+        print("Decoder Act", x)
+        x += encoder_activations[-1]
+        n_skips += 1
     
     # channels = 
-    n_skips = 0
+    
     for ln in range(n_layers - 1):
       enc_ln = n_layers - 2 - ln
       if self.stride == 2:
