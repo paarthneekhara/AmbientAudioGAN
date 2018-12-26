@@ -1,21 +1,28 @@
 export CUDA_VISIBLE_DEVICES="0"
-TRAIN_DIR=/data2/paarth/TrainDir/Ambient/tatum_dp_standardAE
-rm -rf ${TRAIN_DIR}
+TRAIN_DIR=/data2/paarth/TrainDir/Ambient/tatum_dp_standardAE_new
+# rm -rf ${TRAIN_DIR}
 python3 train_evaluate.py train \
 	${TRAIN_DIR} \
 	--data_dir /data2/paarth/ambient/clipped_dp_512_04/tatum/train \
 	--data_fastwav \
-	--model_overrides "objective=l1,batchnorm=False,train_batch_size=64,alpha=200.0,enc_length=64,use_skip=False" \
+	--model_overrides "objective=l1,batchnorm=False,train_batch_size=64,alpha=150.0,enc_length=64,use_skip=False" \
 	--train_summary_every_nsecs 60 
 
 export CUDA_VISIBLE_DEVICES="-1"
-TRAIN_DIR=/data2/paarth/TrainDir/Ambient/tatum_dp_standardAE
+TRAIN_DIR=/data2/paarth/TrainDir/Ambient/tatum_dp_standardAE_new
 python3 train_evaluate.py eval \
 	${TRAIN_DIR} \
 	--data_dir /data2/paarth/ambient/clipped_dp_512_04/tatum/valid \
 	--data_fastwav \
-	--model_overrides "objective=l1,batchnorm=False,train_batch_size=2,alpha=200.0,enc_length=64,use_skip=False"
+	--model_overrides "objective=l1,batchnorm=False,train_batch_size=2,alpha=150.0,enc_length=64,use_skip=False"
 
+export CUDA_VISIBLE_DEVICES="-1"
+TRAIN_DIR=/data2/paarth/TrainDir/Ambient/tatum_dp_standardAE_new
+python3 train_evaluate.py infer \
+	${TRAIN_DIR} \
+	--data_dir /data2/paarth/ambient/clipped_dp_512_04/tatum/valid8s \
+	--data_fastwav \
+	--model_overrides "objective=l1,batchnorm=False,train_batch_size=1,alpha=150.0,enc_length=64,use_skip=False,subseq_len=131072"
 
 
 export CUDA_VISIBLE_DEVICES="1"
@@ -81,7 +88,7 @@ python3 train_evaluate.py eval \
 export CUDA_VISIBLE_DEVICES="0"
 TRAIN_DIR=/data2/paarth/TrainDir/Ambient/DC_tatum_dp_standardAE
 rm -rf ${TRAIN_DIR}
-python3 train_evaluate.py train \
+python3 train_declipper.py train \
 	${TRAIN_DIR} \
 	--data_dir /data2/paarth/ambient/clipped_dp_512_04/tatum/train \
 	--data_fastwav \
@@ -90,7 +97,7 @@ python3 train_evaluate.py train \
 
 export CUDA_VISIBLE_DEVICES="-1"
 TRAIN_DIR=/data2/paarth/TrainDir/Ambient/DC_tatum_dp_standardAE
-python3 train_evaluate.py eval \
+python3 train_declipper.py eval \
 	${TRAIN_DIR} \
 	--data_dir /data2/paarth/ambient/clipped_dp_512_04/tatum/valid \
 	--data_fastwav \

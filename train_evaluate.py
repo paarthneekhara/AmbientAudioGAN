@@ -49,7 +49,46 @@ def train(fps, args):
       save_summaries_secs=args.train_summary_every_nsecs) as sess:
     while not sess.should_stop():
       model.train_loop(sess)
-  
+
+def infer(fps, args):
+  infer_dir = os.path.join(args.train_dir, 'infer_valid')
+  if not os.path.isdir(infer_dir):
+    os.makedirs(infer_dir)
+  model = WaveAE(Modes.INFER)
+  model, summary = override_model_attrs(model, args.model_overrides)
+  print('-' * 80)
+  print(summary)
+  print('-' * 80)
+
+  with tf.name_scope('loader'):
+    clean, x = waveform_decoder(
+        fps=fps,
+        batch_size=model.eval_batch_size,
+        subseq_len=model.subseq_len,
+        audio_fs=model.audio_fs,
+        audio_mono=True,
+        audio_normalize=True,
+        decode_fastwav=args.data_fastwav,
+        decode_parallel_calls=1,
+        repeat=False,
+        shuffle=False,
+        shuffle_buffer_size=None,
+        subseq_randomize_offset=False,
+        subseq_overlap_ratio=0.,
+        subseq_pad_end=True,
+        prefetch_size=None,
+        gpu_num=None)
+
+  model.build_inference(clean, x)
+  saver = tf.train.Saver(var_list=model.G_vars, max_to_keep=1)
+  summary_writer = tf.summary.FileWriter(infer_dir)
+
+  ckpt_fp = args.infer_ckpt_fp
+  with tf.Session() as sess:
+    model.infer(ckpt_fp, sess, summary_writer, saver, infer_dir)
+  print ("Done")
+
+
 def eval(fps, args):
   eval_dir = os.path.join(args.train_dir, 'eval_valid')
   if not os.path.isdir(eval_dir):
@@ -106,12 +145,12 @@ if __name__ == '__main__':
 
   parser.add_argument('mode', type=str, choices=['train', 'eval'])
   parser.add_argument('train_dir', type=str)
+  parser.add_argument('--infer_ckpt_fp', type=str)
 
   parser.add_argument('--data_dir', type=str, required=True)
   parser.add_argument('--data_fastwav', dest='data_fastwav', action='store_true')
   parser.add_argument('--data_randomize_offset', dest='data_randomize_offset', action='store_true')
   parser.add_argument('--data_overlap_ratio', type=float)
-
   parser.add_argument('--model_overrides', type=str)
 
   parser.add_argument('--train_ckpt_every_nsecs', type=int)
@@ -122,6 +161,7 @@ if __name__ == '__main__':
       mode=None,
       train_dir=None,
       data_dir=None,
+      infer_ckpt_fp=None,
       data_fastwav=False,
       data_randomize_offset=False,
       data_overlap_ratio=0.,
@@ -142,5 +182,7 @@ if __name__ == '__main__':
     train(fps, args)
   elif args.mode == 'eval':
     eval(fps, args)
+  elif args.mode == 'infer':
+    infer(fps, args)
   else:
     raise NotImplementedError()

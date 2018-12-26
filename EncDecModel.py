@@ -13,7 +13,7 @@ class WaveAE(Model):
   subseq_len = 16384
   audio_fs = 16000
   batchnorm = False
-  objective = 'l2'
+  objective = 'l1'
   phaseshuffle_rad = 0
   zdim = 100
   wgangp_lambda = 10
@@ -342,6 +342,41 @@ class WaveAE(Model):
     ]
     self.summaries = tf.summary.merge(summaries)
 
+  def build_inference(self, clean_audio, x):
+    try:
+      batch_size = int(x.get_shape()[0])
+    except:
+      batch_size = tf.shape(x)[0]
+    slice_factor = int( 1. * self.subseq_len / 16384 )
+    
+    clean_sliced = tf.reshape(clean_audio, [batch_size * slice_factor, 16384, 1, 1])
+    x_sliced = tf.reshape(x, [batch_size * slice_factor, 16384, 1, 1])
+
+    with tf.variable_scope('Gen'):
+      E_x, D_E_x = self.build_generator(x_sliced)
+
+    input_mask = tf.cast( tf.less(tf.abs(x_sliced), tf.ones_like(x_sliced)*0.99), dtype = tf.float32 )
+    signal_filled = input_mask * x_sliced + (1 - input_mask) * D_E_x
+
+    self.G_vars = G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Gen')
+    self.step = step = tf.train.get_or_create_global_step()
+
+    D_E_x_complete = tf.reshape(D_E_x, [batch_size, -1, 1, 1])
+    signal_filled_complete = tf.reshape(signal_filled, [batch_size, -1, 1, 1])
+
+    summaries = [
+        tf.summary.audio('a_measured', x[:, :, 0, :], self.audio_fs),
+        tf.summary.audio('b_clean', clean_audio[:, :, 0, :], self.audio_fs),
+        tf.summary.audio('c_filled', signal_filled_complete[:, :, 0, :], self.audio_fs),
+        tf.summary.audio('d_D_E_x', D_E_x_complete[:, :, 0, :], self.audio_fs)
+    ]
+    self.summaries = tf.summary.merge(summaries)
+
+    # clean_segs = tf.reshape(clean_audio, [batch_size, 16384, -1])
+    # x_segs = tf.reshape(x, [batch_size, 16384, -1])
+
+
+
 
   def train_loop(self, sess):
     
@@ -350,6 +385,13 @@ class WaveAE(Model):
       sess.run(self.D_train_op)
     sess.run(self.G_train_op)
 
+  def infer(self, ckpt_fp, sess, summary_writer=None, saver=None, eval_dir=None):
+    saver.restore(sess, ckpt_fp)
+    while True:
+      try:
+        _summaries, _step = sess.run([self.summaries, self.step])
+      except tf.errors.OutOfRangeError:
+        break
 
   def eval_ckpt(self, ckpt_fp, sess, summary_writer=None, saver=None, eval_dir=None):
     saver.restore(sess, ckpt_fp)
