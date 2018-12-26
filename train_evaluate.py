@@ -143,7 +143,7 @@ if __name__ == '__main__':
 
   parser = ArgumentParser()
 
-  parser.add_argument('mode', type=str, choices=['train', 'eval'])
+  parser.add_argument('mode', type=str, choices=['train', 'eval', 'infer'])
   parser.add_argument('train_dir', type=str)
   parser.add_argument('--infer_ckpt_fp', type=str)
 

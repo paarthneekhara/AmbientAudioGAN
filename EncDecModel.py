@@ -37,6 +37,7 @@ class WaveAE(Model):
   emb_channels = 128
   z_channels = 32
   enc_nonlin = 'leaky_relu'
+  ae_exclusive = False
 
   def __init__(self, mode, *args, **kwargs):
     super().__init__(mode, *args, **kwargs)
@@ -289,6 +290,8 @@ class WaveAE(Model):
     self.l1 = l1 = tf.reduce_mean(tf.abs(input_mask * x - input_mask * D_E_x))
     self.l2 = l2 = tf.reduce_mean(tf.square(input_mask * x - input_mask * D_E_x))
     
+    l1_opt = tf.train.AdamOptimizer(learning_rate=2e-4, beta1=0.5, beta2=0.9)
+
     if self.objective == 'l1':
       recon_loss = l1
     elif self.objective == 'l2':
@@ -303,8 +306,9 @@ class WaveAE(Model):
     G_loss_combined = G_loss + self.alpha * recon_loss
     self.G_train_op = G_opt.minimize(G_loss_combined, var_list=G_vars,
         global_step=step)
-    self.D_train_op = D_opt.minimize(D_loss, var_list=D_vars)
 
+    self.D_train_op = D_opt.minimize(D_loss, var_list=D_vars)
+    self.l1_train_op = D_opt.minimize(recon_loss, var_list=G_vars)
     # self.all_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='AE') + [step]
 
     embedding_image = tf.image.rot90(tf.expand_dims(E_x[:, :, 0, :], -1))
@@ -360,6 +364,7 @@ class WaveAE(Model):
 
     self.G_vars = G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Gen')
     self.step = step = tf.train.get_or_create_global_step()
+    self.step_op = tf.assign(self.step, self.step+1)
 
     D_E_x_complete = tf.reshape(D_E_x, [batch_size, -1, 1, 1])
     signal_filled_complete = tf.reshape(signal_filled, [batch_size, -1, 1, 1])
@@ -384,12 +389,18 @@ class WaveAE(Model):
     for i in range(num_disc_updates):
       sess.run(self.D_train_op)
     sess.run(self.G_train_op)
+    
+    if self.ae_exclusive:
+      sess.run(self.l1_train_op)
+
 
   def infer(self, ckpt_fp, sess, summary_writer=None, saver=None, eval_dir=None):
     saver.restore(sess, ckpt_fp)
+    sess.run(self.step.initializer)
     while True:
       try:
-        _summaries, _step = sess.run([self.summaries, self.step])
+        _summaries, _step, _ = sess.run([self.summaries, self.step, self.step_op])
+        summary_writer.add_summary(_summaries, _step)
       except tf.errors.OutOfRangeError:
         break
 

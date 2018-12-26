@@ -1,25 +1,26 @@
 export CUDA_VISIBLE_DEVICES="0"
-TRAIN_DIR=/data2/paarth/TrainDir/Ambient/tatum_dp_standardAE_new
+TRAIN_DIR=/data2/paarth/TrainDir/Ambient/tatum_dp_standardAE_newPS
 # rm -rf ${TRAIN_DIR}
 python3 train_evaluate.py train \
 	${TRAIN_DIR} \
 	--data_dir /data2/paarth/ambient/clipped_dp_512_04/tatum/train \
 	--data_fastwav \
-	--model_overrides "objective=l1,batchnorm=False,train_batch_size=64,alpha=150.0,enc_length=64,use_skip=False" \
+	--model_overrides "objective=l1,batchnorm=False,train_batch_size=64,alpha=150.0,enc_length=64,use_skip=False,phaseshuffle_rad=2" \
 	--train_summary_every_nsecs 60 
 
 export CUDA_VISIBLE_DEVICES="-1"
-TRAIN_DIR=/data2/paarth/TrainDir/Ambient/tatum_dp_standardAE_new
+TRAIN_DIR=/data2/paarth/TrainDir/Ambient/tatum_dp_standardAE_newPS
 python3 train_evaluate.py eval \
 	${TRAIN_DIR} \
 	--data_dir /data2/paarth/ambient/clipped_dp_512_04/tatum/valid \
 	--data_fastwav \
-	--model_overrides "objective=l1,batchnorm=False,train_batch_size=2,alpha=150.0,enc_length=64,use_skip=False"
+	--model_overrides "objective=l1,batchnorm=False,train_batch_size=2,alpha=150.0,enc_length=64,use_skip=False,phaseshuffle_rad=2"
 
 export CUDA_VISIBLE_DEVICES="-1"
 TRAIN_DIR=/data2/paarth/TrainDir/Ambient/tatum_dp_standardAE_new
 python3 train_evaluate.py infer \
 	${TRAIN_DIR} \
+	--infer_ckpt_fp /data2/paarth/TrainDir/Ambient/tatum_dp_standardAE_new/eval_valid/best_clipped_l1-8608 \
 	--data_dir /data2/paarth/ambient/clipped_dp_512_04/tatum/valid8s \
 	--data_fastwav \
 	--model_overrides "objective=l1,batchnorm=False,train_batch_size=1,alpha=150.0,enc_length=64,use_skip=False,subseq_len=131072"
@@ -102,3 +103,31 @@ python3 train_declipper.py eval \
 	--data_dir /data2/paarth/ambient/clipped_dp_512_04/tatum/valid \
 	--data_fastwav \
 	--model_overrides "objective=l1,batchnorm=False,train_batch_size=2,alpha=200.0,enc_length=64,use_skip=False"
+
+
+
+
+
+
+
+
+
+
+
+export CUDA_VISIBLE_DEVICES="1"
+TRAIN_DIR=/data2/paarth/TrainDir/Ambient/tatum_dp_standardAE_exclusive
+# rm -rf ${TRAIN_DIR}
+python3 train_evaluate.py train \
+	${TRAIN_DIR} \
+	--data_dir /data2/paarth/ambient/clipped_dp_512_04/tatum/train \
+	--data_fastwav \
+	--model_overrides "objective=l1,batchnorm=False,train_batch_size=64,alpha=0.0,enc_length=64,use_skip=False,ae_exclusive=True" \
+	--train_summary_every_nsecs 60 
+
+export CUDA_VISIBLE_DEVICES="-1"
+TRAIN_DIR=/data2/paarth/TrainDir/Ambient/tatum_dp_standardAE_exclusive
+python3 train_evaluate.py eval \
+	${TRAIN_DIR} \
+	--data_dir /data2/paarth/ambient/clipped_dp_512_04/tatum/valid \
+	--data_fastwav \
+	--model_overrides "objective=l1,batchnorm=False,train_batch_size=2,alpha=0.0,enc_length=64,use_skip=False,ae_exclusive=True"
