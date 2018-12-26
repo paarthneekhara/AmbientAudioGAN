@@ -75,11 +75,11 @@ class WaveAE(Model):
 
     # with tf.variable_scope('Gen'):
     if self.enc_nonlin == 'leaky_relu':
-      self.enc_nonlin = tf.nn.leaky_relu
+      enc_nonlin = tf.nn.leaky_relu
     elif self.enc_nonlin == 'tanh':
-      self.enc_nonlin = tf.nn.tanh
+      enc_nonlin = tf.nn.tanh
     elif self.enc_nonlin == 'relu':
-      self.enc_nonlin = tf.nn.relu
+      enc_nonlin = tf.nn.relu
 
     with tf.variable_scope('E'):
       enc = WaveEncoder(
