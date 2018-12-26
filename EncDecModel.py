@@ -35,6 +35,8 @@ class WaveAE(Model):
   enc_length = 64
   skip_limit = 3
   emb_channels = 128
+  z_channels = 32
+  enc_nonlin = 'leaky_relu'
 
   def __init__(self, mode, *args, **kwargs):
     super().__init__(mode, *args, **kwargs)
@@ -72,6 +74,13 @@ class WaveAE(Model):
     training = self.mode == Modes.TRAIN
 
     # with tf.variable_scope('Gen'):
+    if self.enc_nonlin == 'leaky_relu':
+      self.enc_nonlin = tf.nn.leaky_relu
+    elif self.enc_nonlin == 'tanh':
+      self.enc_nonlin = tf.nn.tanh
+    elif self.enc_nonlin == 'relu':
+      self.enc_nonlin = tf.nn.relu
+
     with tf.variable_scope('E'):
       enc = WaveEncoder(
         dim = self.dim,
@@ -79,15 +88,16 @@ class WaveAE(Model):
         stride = self.stride,
         batchnorm=self.batchnorm,
         enc_length = self.enc_length,
-        emb_channels = self.emb_channels
+        emb_channels = self.emb_channels,
+        nonlin=enc_nonlin
         )
       self.E_x = E_x = enc(x, training=training)
 
     z = tf.random_uniform([batch_size, self.zdim], -1, 1, dtype=tf.float32)
     with tf.variable_scope('z_project'):
-      z_proj = tf.layers.dense(z, self.enc_length * self.emb_channels)
-      z_proj = tf.reshape(z_proj, [batch_size, self.enc_length, 1, self.emb_channels])
-      z_proj = tf.nn.tanh(z_proj)
+      z_proj = tf.layers.dense(z, self.enc_length * self.z_channels)
+      z_proj = tf.reshape(z_proj, [batch_size, self.enc_length, 1, self.z_channels])
+      z_proj = tf.nn.leaky_relu(z_proj)
     E_x_concat = tf.concat([E_x, z_proj], axis = -1)
     print("E_x concat", E_x_concat)
     
@@ -166,11 +176,12 @@ class WaveAE(Model):
         output = phaseshuffle(output)
       print (output)
     # Aggregate
-    with tf.variable_scope('downconv_1x1'):
-      output = conv1x1d(output, self.dim * 1)
-    output = lrelu(output)    
+    # with tf.variable_scope('downconv_1x1'):
+    #   output = conv1x1d(output, self.dim * 1)
+    # output = lrelu(output)    
     print (output)
-    output = tf.reshape(output, [batch_size, 16 * self.dim])
+    # output = tf.reshape(output, [batch_size, 16 * self.dim])
+    output = tf.reshape(output, [batch_size, -1])
     print (output)
     # Connect to single logit
     with tf.variable_scope('output'):
