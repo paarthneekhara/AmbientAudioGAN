@@ -27,6 +27,7 @@ class WaveAE(Model):
 
   train_batch_size = 64
   alpha = 100.0
+  sf_reg = 1.0
   eval_batch_size = 1
   dim = 64
   kernel_len = 25
@@ -44,6 +45,15 @@ class WaveAE(Model):
     if self.mode == Modes.EVAL:
       self.best_clipped_l1 = None
 
+  def calculate_spectral_flatness(self, audio_signal):
+    stfs = tf.contrib.signal.stft(audio_signal, frame_length=256, frame_step=128, fft_length=256)
+    power = tf.real(stfs * tf.conj(stfs))
+    log_offset = 1e-6
+    power_log = tf.log(power + log_offset)
+    spectral_flatness = tf.exp(tf.reduce_sum(power_log, axis = 2)/ tf.shape(power_log, out_type = tf.float32)[2])
+    spectral_flatness /= (tf.reduce_sum(power, axis = 2)/tf.shape(power, out_type = tf.float32)[2])
+
+    return spectral_flatness
 
   # input shape: bs, len, 1, 1
   def measure_signal(self, x):
@@ -204,6 +214,8 @@ class WaveAE(Model):
     with tf.variable_scope('Gen'):
       E_x, D_E_x = self.build_generator(x)
 
+    spectral_flatness = self.calculate_spectral_flatness(D_E_x[:,:,0,0])
+
     # zeros where input is clipped, one else where  
     input_mask = tf.cast( tf.less(tf.abs(x), tf.ones_like(x)*0.99), dtype = tf.float32 )
     signal_filled = input_mask * x + (1 - input_mask) * D_E_x
@@ -303,7 +315,7 @@ class WaveAE(Model):
     self.step = step = tf.train.get_or_create_global_step()
     
 
-    G_loss_combined = G_loss + self.alpha * recon_loss
+    G_loss_combined = G_loss + self.alpha * recon_loss + self.sf_reg * spectral_flatness
     self.G_train_op = G_opt.minimize(G_loss_combined, var_list=G_vars,
         global_step=step)
 
@@ -319,6 +331,7 @@ class WaveAE(Model):
     tf.summary.image('E_x', embedding_image)
     tf.summary.scalar('G_loss', G_loss)
     tf.summary.scalar('G_loss_combined', G_loss_combined)
+    tf.summary.scalar('spectral_flatness', spectral_flatness)
     tf.summary.scalar('D_loss', D_loss)
     tf.summary.scalar('l1', l1)
     tf.summary.scalar('l2', l2)
