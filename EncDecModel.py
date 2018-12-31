@@ -52,7 +52,7 @@ class WaveAE(Model):
     power_log = tf.log(power + log_offset)
     spectral_flatness = tf.exp(tf.reduce_sum(power_log, axis = 2)/ tf.shape(power_log, out_type = tf.float32)[2])
     spectral_flatness /= (tf.reduce_sum(power, axis = 2)/tf.shape(power, out_type = tf.float32)[2])
-
+    spectral_flatness = tf.reduce_mean(spectral_flatness)
     return spectral_flatness
 
   # input shape: bs, len, 1, 1
