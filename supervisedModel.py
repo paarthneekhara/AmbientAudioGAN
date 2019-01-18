@@ -326,11 +326,12 @@ class WaveAE(Model):
       self.G_train_op = G_opt.minimize(G_loss_combined, var_list=G_vars,
         global_step=step)
       self.D_train_op = D_opt.minimize(D_loss, var_list=D_vars)
+      self.l1_train_op = D_opt.minimize(recon_loss, var_list=G_vars)
     else:
       self.train_op = opt.minimize(recon_loss, var_list=G_vars,
         global_step=step)
 
-    self.l1_train_op = D_opt.minimize(recon_loss, var_list=G_vars)
+    
     # self.all_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='AE') + [step]
 
     embedding_image = tf.image.rot90(tf.expand_dims(E_x[:, :, 0, :], -1))
