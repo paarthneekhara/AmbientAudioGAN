@@ -415,7 +415,7 @@ class WaveAE(Model):
       if self.ae_exclusive:
         sess.run(self.l1_train_op)
     else:
-      sess.run(self.G_train_op)
+      sess.run(self.train_op)
 
 
   def infer(self, ckpt_fp, sess, summary_writer=None, saver=None, eval_dir=None):
