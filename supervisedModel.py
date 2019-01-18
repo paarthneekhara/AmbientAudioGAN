@@ -214,19 +214,11 @@ class WaveAE(Model):
     with tf.variable_scope('Gen'):
       E_x, D_E_x = self.build_generator(x)
     
-    spectral_flatness = self.calculate_spectral_flatness(D_E_x[:,:,0,0])
-
-    # zeros where input is clipped, one else where  
-    input_mask = tf.cast( tf.less(tf.abs(x), tf.ones_like(x)*0.99), dtype = tf.float32 )
-    signal_filled = input_mask * x + (1 - input_mask) * D_E_x
-    measured = self.measure_signal(D_E_x)
-    print(measured)
-    # measured_expanded = D_E_x
-
+    
     with tf.name_scope('D_x'), tf.variable_scope('Disc'):
-      D_x = self.build_discriminator(x)
+      D_x = self.build_discriminator(clean_audio)
     with tf.name_scope('D_g'), tf.variable_scope('Disc', reuse=True):
-      D_g = self.build_discriminator(measured)
+      D_g = self.build_discriminator(D_E_x)
 
     if self.gan_strategy == 'dcgan':
       D_G_z = D_g
@@ -299,8 +291,8 @@ class WaveAE(Model):
     else:
       raise NotImplementedError()
 
-    self.l1 = l1 = tf.reduce_mean(tf.abs(input_mask * x - input_mask * D_E_x))
-    self.l2 = l2 = tf.reduce_mean(tf.square(input_mask * x - input_mask * D_E_x))
+    self.l1 = l1 = tf.reduce_mean(tf.abs(clean_audio - D_E_x))
+    self.l2 = l2 = tf.reduce_mean(tf.square(clean_audio - D_E_x))
     
     l1_opt = tf.train.AdamOptimizer(learning_rate=2e-4, beta1=0.5, beta2=0.9)
 
@@ -315,7 +307,7 @@ class WaveAE(Model):
     self.step = step = tf.train.get_or_create_global_step()
     
 
-    G_loss_combined = G_loss + self.alpha * recon_loss + self.sf_reg * spectral_flatness
+    G_loss_combined = G_loss + self.alpha * recon_loss
     self.G_train_op = G_opt.minimize(G_loss_combined, var_list=G_vars,
         global_step=step)
 
@@ -327,11 +319,9 @@ class WaveAE(Model):
     tf.summary.audio('clean', clean_audio[:, :, 0, :], self.audio_fs)
     tf.summary.audio('x', x[:, :, 0, :], self.audio_fs)
     tf.summary.audio('D_E_x', D_E_x[:, :, 0, :], self.audio_fs)
-    tf.summary.audio('filled', signal_filled[:, :, 0, :], self.audio_fs)
     tf.summary.image('E_x', embedding_image)
     tf.summary.scalar('G_loss', G_loss)
     tf.summary.scalar('G_loss_combined', G_loss_combined)
-    tf.summary.scalar('spectral_flatness', spectral_flatness)
     tf.summary.scalar('D_loss', D_loss)
     tf.summary.scalar('l1', l1)
     tf.summary.scalar('l2', l2)

@@ -8,10 +8,16 @@ from AudioModel.loader_measured import waveform_decoder
 from AudioModel.model import Modes
 from AudioModel.util import override_model_attrs
 from EncDecModel import WaveAE
+from supervisedModel import WaveAE as supervisedWaveAE
 
 def train(fps, args):
   # Initialize model
-  model = WaveAE(Modes.TRAIN)
+  if args.ae_model == "supervised":
+    print "supervised Model"
+    model = supervisedWaveAE(Modes.TRAIN)
+  else:
+    model = WaveAE(Modes.TRAIN)
+
   model, summary = override_model_attrs(model, args.model_overrides)
   print('-' * 80)
   print(summary)
@@ -145,6 +151,7 @@ if __name__ == '__main__':
 
   parser.add_argument('mode', type=str, choices=['train', 'eval', 'infer'])
   parser.add_argument('train_dir', type=str)
+  parser.add_argument('ae_model', type=str, choices=['supervised', 'unsupervised'])
   parser.add_argument('--infer_ckpt_fp', type=str)
 
   parser.add_argument('--data_dir', type=str, required=True)
@@ -159,6 +166,7 @@ if __name__ == '__main__':
 
   parser.set_defaults(
       mode=None,
+      ae_model = "unsupervised",
       train_dir=None,
       data_dir=None,
       infer_ckpt_fp=None,
