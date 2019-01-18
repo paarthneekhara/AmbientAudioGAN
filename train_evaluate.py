@@ -13,7 +13,7 @@ from supervisedModel import WaveAE as supervisedWaveAE
 def train(fps, args):
   # Initialize model
   if args.ae_model == "supervised":
-    print "supervised Model"
+    print ("supervised Model")
     model = supervisedWaveAE(Modes.TRAIN)
   else:
     model = WaveAE(Modes.TRAIN)

@@ -27,7 +27,6 @@ class WaveAE(Model):
 
   train_batch_size = 64
   alpha = 100.0
-  sf_reg = 0.0
   eval_batch_size = 1
   dim = 64
   kernel_len = 25
