@@ -339,9 +339,11 @@ class WaveAE(Model):
     tf.summary.audio('x', x[:, :, 0, :], self.audio_fs)
     tf.summary.audio('D_E_x', D_E_x[:, :, 0, :], self.audio_fs)
     tf.summary.image('E_x', embedding_image)
-    tf.summary.scalar('G_loss', G_loss)
-    tf.summary.scalar('G_loss_combined', G_loss_combined)
-    tf.summary.scalar('D_loss', D_loss)
+    
+    if self.gan_strategy != 'nogan':
+      tf.summary.scalar('G_loss', G_loss)
+      tf.summary.scalar('G_loss_combined', G_loss_combined)
+      tf.summary.scalar('D_loss', D_loss)
     tf.summary.scalar('l1', l1)
     tf.summary.scalar('l2', l2)
     tf.summary.scalar('loss', recon_loss)
