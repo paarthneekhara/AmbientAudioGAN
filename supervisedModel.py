@@ -263,6 +263,11 @@ class WaveAE(Model):
       gradient_penalty = tf.reduce_mean((slopes - 1.) ** 2.)
 
       D_loss += self.wgangp_lambda * gradient_penalty
+    
+    elif self.gan_strategy == 'nogan':
+      G_loss = tf.zeros([1])
+      D_loss = tf.zeros([1])
+
     else:
       raise ValueError()
 
@@ -287,6 +292,12 @@ class WaveAE(Model):
           learning_rate=1e-4,
           beta1=0.5,
           beta2=0.9)
+
+    elif self.gan_strategy == 'nogan':
+      opt = tf.train.AdamOptimizer(
+          learning_rate=1e-4,
+          beta1=0.5,
+          beta2=0.9)
     else:
       raise NotImplementedError()
 
@@ -305,12 +316,20 @@ class WaveAE(Model):
     self.D_vars = D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Disc')
     self.step = step = tf.train.get_or_create_global_step()
     
+    if self.gan_strategy == 'nogan':
+      G_loss_combined = recon_loss
+    else:
+      G_loss_combined = G_loss + self.alpha * recon_loss
 
-    G_loss_combined = G_loss + self.alpha * recon_loss
-    self.G_train_op = G_opt.minimize(G_loss_combined, var_list=G_vars,
+
+    if self.gan_strategy != 'nogan':
+      self.G_train_op = G_opt.minimize(G_loss_combined, var_list=G_vars,
+        global_step=step)
+      self.D_train_op = D_opt.minimize(D_loss, var_list=D_vars)
+    else:
+      self.train_op = opt.minimize(recon_loss, var_list=G_vars,
         global_step=step)
 
-    self.D_train_op = D_opt.minimize(D_loss, var_list=D_vars)
     self.l1_train_op = D_opt.minimize(recon_loss, var_list=G_vars)
     # self.all_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='AE') + [step]
 
@@ -386,14 +405,16 @@ class WaveAE(Model):
 
 
   def train_loop(self, sess):
-    
-    num_disc_updates = self.wgangp_nupdates if self.gan_strategy == 'wgangp' else 1
-    for i in range(num_disc_updates):
-      sess.run(self.D_train_op)
-    sess.run(self.G_train_op)
-    
-    if self.ae_exclusive:
-      sess.run(self.l1_train_op)
+    if self.gan_strategy != 'nogan':
+      num_disc_updates = self.wgangp_nupdates if self.gan_strategy == 'wgangp' else 1
+      for i in range(num_disc_updates):
+        sess.run(self.D_train_op)
+      sess.run(self.G_train_op)
+      
+      if self.ae_exclusive:
+        sess.run(self.l1_train_op)
+    else:
+      sess.run(self.G_train_op)
 
 
   def infer(self, ckpt_fp, sess, summary_writer=None, saver=None, eval_dir=None):

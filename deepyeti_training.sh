@@ -192,3 +192,58 @@ python3 train_evaluate.py eval \
 	--data_dir /data2/paarth/ambient/clipped_dp_512_04/timit_riff_trans/valid \
 	--data_fastwav \
 	--model_overrides "objective=l1,batchnorm=False,train_batch_size=1,alpha=150.0,enc_length=64,use_skip=False,sf_reg=0.0"
+
+
+export CUDA_VISIBLE_DEVICES="3"
+TRAIN_DIR=/data2/paarth/TrainDir/Ambient/timit_riff_trans/standardAE400
+# rm -rf ${TRAIN_DIR}
+python3 train_evaluate.py train \
+	${TRAIN_DIR} \
+	--data_dir /data2/paarth/ambient/clipped_dp_512_04/timit_riff_trans/train \
+	--data_fastwav \
+	--model_overrides "objective=l1,batchnorm=False,train_batch_size=1,alpha=400.0,enc_length=64,use_skip=False,sf_reg=0.0" \
+	--train_summary_every_nsecs 60
+
+export CUDA_VISIBLE_DEVICES="-1"
+TRAIN_DIR=/data2/paarth/TrainDir/Ambient/timit_riff_trans/standardAE400
+python3 train_evaluate.py eval \
+	${TRAIN_DIR} \
+	--data_dir /data2/paarth/ambient/clipped_dp_512_04/timit_riff_trans/valid \
+	--data_fastwav \
+	--model_overrides "objective=l1,batchnorm=False,train_batch_size=1,alpha=400.0,enc_length=64,use_skip=False,sf_reg=0.0"
+
+
+export CUDA_VISIBLE_DEVICES="-1"
+TRAIN_DIR=/data2/paarth/TrainDir/Ambient/timit_riff_trans/standardAE400
+python3 train_evaluate.py infer \
+	${TRAIN_DIR} \
+	--infer_ckpt_fp /data2/paarth/TrainDir/Ambient/timit_riff_trans/standardAE400/eval_valid/best_clipped_l1-8608 \
+	--data_dir /data2/paarth/ambient/clipped_dp_512_04/timit_riff_trans/valid8s  \
+	--data_fastwav \
+	--model_overrides "objective=l1,batchnorm=False,train_batch_size=1,alpha=400.0,enc_length=64,use_skip=False,sf_reg=0.0"
+
+
+
+
+
+export CUDA_VISIBLE_DEVICES="0"
+TRAIN_DIR=/data2/paarth/TrainDir/SupervisedAmbient/piano/alpha150
+rm -rf ${TRAIN_DIR}
+python3 train_evaluate.py train \
+	${TRAIN_DIR} \
+	supervised \
+	--data_dir /data2/paarth/ambient/clipped_dp_512_04/tatum/train \
+	--data_fastwav \
+	--model_overrides "objective=l1,batchnorm=False,train_batch_size=64,alpha=150.0,enc_length=64,use_skip=False"
+	--train_summary_every_nsecs 60
+
+
+
+export CUDA_VISIBLE_DEVICES="-1"
+TRAIN_DIR=/data2/paarth/TrainDir/SupervisedAmbient/piano/alpha150
+python3 train_evaluate.py eval \
+	${TRAIN_DIR} \
+	supervised \
+	--data_dir /data2/paarth/ambient/clipped_dp_512_04/tatum/valid \
+	--data_fastwav \
+	--model_overrides "objective=l1,batchnorm=False,train_batch_size=1,alpha=150.0,enc_length=64,use_skip=False"
